@@ -1,518 +1,460 @@
 <!DOCTYPE html>
-<!--[if IE 6]>
-<html id="ie6" class="ie ie6 lt-ie9">
-<![endif]-->
-<!--[if IE 7]>
-<html id="ie7" class="ie ie7 lt-ie9">
-<![endif]-->
-<!--[if IE 8]>
-<html id="ie8" class="ie ie8 lt-ie9">
-<![endif]-->
-<!--[if gte IE 9]>
-<html class="ie ie9">
-<![endif]-->
-<!--[if !(IE)]><!-->
-<html>
-  <!--<![endif]-->
+<html lang="vi">
   <head>
-    <meta http-equiv="Pragma" content="no-cache" />
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Christmas Interactive Experience</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+      crossorigin="anonymous"
+    ></script>
 
-    <!-- Title -->
-    <title>I ❤ You</title>
-
-    <!-- Default CSS -->
-    <link rel="stylesheet" href="css/all.css" />
-
-    <!-- Font -->
-    <link
-      href="https://fonts.googleapis.com/css?family=Roboto"
-      rel="stylesheet"
-      type="text/css"
-    />
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #000;
+        font-family: "Segoe UI", sans-serif;
+      }
+      #canvas-container {
+        width: 100%;
+        height: 100vh;
+        display: block;
+      }
+      #ui-layer {
+        position: absolute;
+        bottom: 30px;
+        width: 100%;
+        text-align: center;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .badge {
+        display: inline-block;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid #ffd700;
+        color: #ffd700;
+        padding: 10px 25px;
+        border-radius: 50px;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        text-shadow: 0 0 10px #ffd700;
+      }
+      .guide {
+        color: #ccc;
+        font-size: 13px;
+        margin-bottom: 20px;
+        text-shadow: 0 2px 4px black;
+      }
+      button {
+        pointer-events: auto;
+        cursor: pointer;
+        background: linear-gradient(to bottom, #d32f2f, #8b0000);
+        color: #fff;
+        border: 2px solid #ffd700;
+        padding: 15px 50px;
+        border-radius: 30px;
+        font-weight: 800;
+        font-size: 16px;
+        box-shadow: 0 0 30px rgba(255, 0, 0, 0.6);
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      #camera-preview {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 120px;
+        height: 90px;
+        border: 2px solid rgba(255, 0, 0, 0.5);
+        transform: scaleX(-1);
+        opacity: 0.6;
+        border-radius: 8px;
+      }
+    </style>
   </head>
+
   <body>
-    <!-- Browser no support JavaScript -->
-    <div id="nojavascript" class="nojavascript">
-      Vui lòng bật JavaScript trong trình duyệt của bạn lên.
+    <div id="ui-layer">
+      <div id="status" class="badge">🎄 GIÁNG SINH AN LÀNH 🎄</div>
+      <div class="guide">
+        🖐 <b>Xòe:</b> Bung Quà & Ảnh &nbsp;|&nbsp; 👌 <b>Pinch:</b> Xem chi
+        tiết &nbsp;|&nbsp; ✊ <b>Nắm:</b> Thu cây thông
+      </div>
+      <button id="btnStart" onclick="startSystem()">BẮT ĐẦU TRẢI NGHIỆM</button>
     </div>
+
+    <div id="canvas-container"></div>
+    <video class="input_video" style="display: none"></video>
+    <canvas id="camera-preview"></canvas>
+
     <script>
-      document.getElementById("nojavascript").remove();
+      // ==========================================
+      // 1. CẤU HÌNH NHẠC VÀ TÀI NGUYÊN
+      // ==========================================
+      const MUSIC_URL = "./img/m1.mp3";
+      const bgMusic = new Audio(MUSIC_URL);
+      bgMusic.loop = true;
+      bgMusic.volume = 0.8;
+
+      const loader = new THREE.TextureLoader();
+      const photoFiles = [
+        "./img/1.png",
+        "./img/image.png",
+        "./img/2.png",
+        "./img/3.png",
+        "./img/4.png",
+      ];
+      const photoTextures = photoFiles.map((f) => loader.load(f));
+
+      function createCustomTexture(type) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128;
+        canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        const cx = 64,
+          cy = 64;
+
+        if (type === "gold_glow") {
+          const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
+          grd.addColorStop(0, "#FFFFFF");
+          grd.addColorStop(0.5, "#FFD700");
+          grd.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grd;
+          ctx.fillRect(0, 0, 128, 128);
+        } else if (type === "red_light") {
+          const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 50);
+          grd.addColorStop(0, "#FFAAAA");
+          grd.addColorStop(0.3, "#FF0000");
+          grd.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grd;
+          ctx.fillRect(0, 0, 128, 128);
+        } else if (type === "gift_red") {
+          ctx.fillStyle = "#D32F2F";
+          ctx.fillRect(20, 20, 88, 88);
+          ctx.fillStyle = "#FFD700";
+          ctx.fillRect(54, 20, 20, 88);
+          ctx.fillRect(20, 54, 88, 20);
+        }
+        return new THREE.CanvasTexture(canvas);
+      }
+
+      const textures = {
+        gold: createCustomTexture("gold_glow"),
+        red: createCustomTexture("red_light"),
+        gift: createCustomTexture("gift_red"),
+      };
+
+      // ==========================================
+      // 2. KHỞI TẠO 3D & HỆ THỐNG HẠT
+      // ==========================================
+      const CONFIG = {
+        goldCount: 2000,
+        redCount: 300,
+        giftCount: 150,
+        explodeRadius: 65,
+        photoOrbitRadius: 25,
+        treeHeight: 70,
+        treeBaseRadius: 35,
+      };
+      let scene,
+        camera,
+        renderer,
+        groupGold,
+        groupRed,
+        groupGift,
+        titleMesh,
+        starMesh;
+      let photoMeshes = [],
+        state = "TREE",
+        selectedIndex = 0,
+        handX = 0.5;
+
+      function init3D() {
+        const container = document.getElementById("canvas-container");
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.002);
+        camera = new THREE.PerspectiveCamera(
+          60,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.z = 100;
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        groupGold = createParticleSystem("gold", CONFIG.goldCount, 2.0);
+        groupRed = createParticleSystem("red", CONFIG.redCount, 3.5);
+        groupGift = createParticleSystem("gift", CONFIG.giftCount, 3.0);
+
+        createPhotos();
+        createDecorations();
+        animate();
+      }
+
+      function createParticleSystem(type, count, size) {
+        const pPositions = [],
+          pExplodeTargets = [],
+          pTreeTargets = [];
+        for (let i = 0; i < count; i++) {
+          const h = Math.random() * CONFIG.treeHeight;
+          const y = h - CONFIG.treeHeight / 2;
+          let radiusRatio =
+            type === "gold"
+              ? Math.sqrt(Math.random())
+              : 0.9 + Math.random() * 0.1;
+          const maxR = (1 - h / CONFIG.treeHeight) * CONFIG.treeBaseRadius;
+          const r = maxR * radiusRatio;
+          const theta = Math.random() * Math.PI * 2;
+          pTreeTargets.push(r * Math.cos(theta), y, r * Math.sin(theta));
+
+          const u = Math.random(),
+            v = Math.random();
+          const phi = Math.acos(2 * v - 1),
+            lam = 2 * Math.PI * u;
+          let radMult = type === "gift" ? 1.2 : 1.0;
+          const rad = CONFIG.explodeRadius * Math.cbrt(Math.random()) * radMult;
+          pExplodeTargets.push(
+            rad * Math.sin(phi) * Math.cos(lam),
+            rad * Math.sin(phi) * Math.sin(lam),
+            rad * Math.cos(phi)
+          );
+          pPositions.push(
+            pTreeTargets[i * 3],
+            pTreeTargets[i * 3 + 1],
+            pTreeTargets[i * 3 + 2]
+          );
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(pPositions, 3)
+        );
+        geo.userData = { tree: pTreeTargets, explode: pExplodeTargets };
+        const mat = new THREE.PointsMaterial({
+          size,
+          map: textures[type],
+          transparent: true,
+          blending:
+            type === "gift" ? THREE.NormalBlending : THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const points = new THREE.Points(geo, mat);
+        scene.add(points);
+        return points;
+      }
+
+      function createPhotos() {
+        const geo = new THREE.PlaneGeometry(8, 8);
+        const borderMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+        for (let i = 0; i < 5; i++) {
+          const mesh = new THREE.Mesh(
+            geo,
+            new THREE.MeshBasicMaterial({
+              map: photoTextures[i],
+              side: THREE.DoubleSide,
+            })
+          );
+          const border = new THREE.Mesh(
+            new THREE.PlaneGeometry(9, 9),
+            borderMat
+          );
+          border.position.z = -0.1;
+          mesh.add(border);
+          mesh.visible = false;
+          mesh.scale.set(0, 0, 0);
+          scene.add(mesh);
+          photoMeshes.push(mesh);
+        }
+      }
+
+      function createDecorations() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        ctx.font = 'bold italic 90px "Times New Roman"';
+        ctx.fillStyle = "#FFD700";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "#FF0000";
+        ctx.shadowBlur = 40;
+        ctx.fillText("MERRY CHRISTMAS", 512, 130);
+        titleMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(60, 15),
+          new THREE.MeshBasicMaterial({
+            map: new THREE.CanvasTexture(canvas),
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+          })
+        );
+        titleMesh.position.y = 50;
+        scene.add(titleMesh);
+
+        starMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(12, 12),
+          new THREE.MeshBasicMaterial({
+            map: textures.gold,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+          })
+        );
+        starMesh.position.y = CONFIG.treeHeight / 2 + 2;
+        scene.add(starMesh);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const time = Date.now() * 0.001;
+        const speed = 0.06;
+        const handRotY = (handX - 0.5) * 2.5;
+
+        [groupGold, groupRed, groupGift].forEach((g) => {
+          const pos = g.geometry.attributes.position.array;
+          const targets =
+            state === "TREE"
+              ? g.geometry.userData.tree
+              : g.geometry.userData.explode;
+          for (let i = 0; i < pos.length; i++)
+            pos[i] += (targets[i] - pos[i]) * speed;
+          g.geometry.attributes.position.needsUpdate = true;
+          if (state === "TREE") g.rotation.y += 0.003;
+          else g.rotation.y += (handRotY - g.rotation.y) * 0.05;
+        });
+
+        if (state === "TREE") {
+          titleMesh.visible = starMesh.visible = true;
+          photoMeshes.forEach((m) => {
+            m.visible = false;
+            m.scale.set(0, 0, 0);
+          });
+        } else if (state === "EXPLODE") {
+          titleMesh.visible = starMesh.visible = false;
+          photoMeshes.forEach((mesh, i) => {
+            mesh.visible = true;
+            const angle = groupGold.rotation.y + i * ((Math.PI * 2) / 5);
+            mesh.position.lerp(
+              new THREE.Vector3(
+                Math.sin(angle) * 25,
+                Math.sin(time + i) * 3,
+                Math.cos(angle) * 25
+              ),
+              0.1
+            );
+            mesh.lookAt(camera.position);
+            const s = mesh.position.z > 5 ? 1.8 : 0.6;
+            mesh.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
+          });
+        } else if (state === "PHOTO") {
+          photoMeshes.forEach((mesh, i) => {
+            if (i === selectedIndex) {
+              mesh.position.lerp(new THREE.Vector3(0, 0, 60), 0.1);
+              mesh.scale.lerp(new THREE.Vector3(5, 5, 5), 0.1);
+            } else mesh.scale.lerp(new THREE.Vector3(0, 0, 0), 0.1);
+          });
+        }
+        renderer.render(scene, camera);
+      }
+
+      // ==========================================
+      // 3. XỬ LÝ NHẠC & CAMERA BIẾN ĐỔI
+      // ==========================================
+      function startSystem() {
+        // Phát nhạc ngay khi nhấn nút
+        bgMusic
+          .play()
+          .then(() => {
+            console.log("Nhạc đang phát...");
+          })
+          .catch((e) => console.error("Lỗi phát nhạc:", e));
+
+        document.getElementById("btnStart").style.display = "none";
+        init3D();
+
+        const video = document.getElementsByClassName("input_video")[0];
+        const canvas = document.getElementById("camera-preview");
+        const ctx = canvas.getContext("2d");
+        const statusDiv = document.getElementById("status");
+
+        const hands = new Hands({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        hands.onResults((results) => {
+          ctx.clearRect(0, 0, 120, 90);
+          ctx.drawImage(results.image, 0, 0, 120, 90);
+          if (results.multiHandLandmarks.length > 0) {
+            const lm = results.multiHandLandmarks[0];
+            handX = lm[9].x;
+            const wrist = lm[0];
+            const avgDist =
+              [8, 12, 16, 20].reduce(
+                (acc, i) =>
+                  acc + Math.hypot(lm[i].x - wrist.x, lm[i].y - wrist.y),
+                0
+              ) / 4;
+            const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+
+            if (avgDist < 0.25) {
+              state = "TREE";
+              statusDiv.innerText = "✊ CÂY THÔNG";
+            } else if (pinchDist < 0.05) {
+              state = "PHOTO";
+              statusDiv.innerText = "👌 XEM ẢNH";
+            } else {
+              state = "EXPLODE";
+              statusDiv.innerText = "🖐 BUNG QUÀ";
+            }
+          }
+        });
+
+        const cam = new Camera(video, {
+          onFrame: async () => {
+            await hands.send({ image: video });
+          },
+          width: 320,
+          height: 240,
+        });
+        cam.start();
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
     </script>
-
-    <!-- Love -->
-    <div class="flowtime">
-      <div class="ft-section section-1" data-id="section-1">
-        <div id="/section-1/page-1" class="ft-page page-1" data-id="page-1">
-          <p class="text1">
-            <span id="text-75">Anh </span> ❤ <span id="text-76">Em</span>
-          </p>
-          <p class="text1">
-            <span id="text-75">Chúc mừng chúc ta có nhau 30 ngày</span>
-          </p>
-          <p class="text2">
-            Nhấn phím "↓" <span id="text-78">từ từ để trải nghiệm</span>
-          </p>
-        </div>
-        <div id="/section-1/page-2" class="ft-page page-2" data-id="page-2">
-          <p class="top-text" id="text-1">
-            Khi thiếu bóng dáng em, trong tim anh trống rỗng.
-          </p>
-          <img src="img/1.jpg" />
-        </div>
-        <div
-          id="/section-1/page-3"
-          class="ft-page page-3 left-img"
-          data-id="page-3"
-        >
-          <h2 class="text" id="text-2">Cảm thấy lạc lõng...</h2>
-          <img src="img/2.jpg" />
-        </div>
-        <div
-          id="/section-1/page-4"
-          class="ft-page page-4 full-img"
-          data-id="page-4"
-        >
-          <h2 class="center-text" id="text-3">... và cô đơn.</h2>
-          <img src="img/3.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-2" data-id="section-2">
-        <div
-          id="/section-2/page-1"
-          class="ft-page page-5 full-img"
-          data-id="page-1"
-        >
-          <h2 class="center-text" id="text-4">
-            Trong đầu luôn chứa những nội tâm.
-          </h2>
-          <img src="img/4.jpg" />
-        </div>
-        <div id="/section-2/page-2" class="ft-page page-6" data-id="page-2">
-          <h2 class="center-text" id="text-5">
-            Anh muốn bay thật cao để tìm em!
-          </h2>
-          <img src="img/5.jpg" />
-        </div>
-        <div id="/section-2/page-3" class="ft-page page-7" data-id="page-3">
-          <h3 id="text-6">Anh vẫn lạc quan, mĩm cười,chờ đợi.</h3>
-          <img src="img/6.jpg" />
-        </div>
-        <div
-          id="/section-2/page-4"
-          class="ft-page page-8 full-img"
-          data-id="page-4"
-        >
-          <h3 id="text-7">Dù cuộc sống không thể tránh khỏi trắc trở...</h3>
-          <img src="img/7.jpg" />
-        </div>
-        <div id="/section-2/page-5" class="ft-page page-9" data-id="page-5">
-          <h3 id="text-8">Những anh vẫn luôn đối phó để dành lấy bình yên!</h3>
-          <img src="img/8.jpg" />
-        </div>
-        <div id="/section-2/page-6" class="ft-page page-10" data-id="page-6">
-          <h3 id="text-9">Mĩm cười với mặt trời, tự tin với bản thân!</h3>
-          <img src="img/9.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-3" data-id="section-3">
-        <div
-          id="/section-3/page-1"
-          class="ft-page page-11 full-img"
-          data-id="page-1"
-        >
-          <h3 id="text-10">Cuộc sống anh không phải lúc nào cũng suôn sẻ!</h3>
-          <img src="img/10.jpg" />
-        </div>
-        <div id="/section-3/page-2" class="ft-page page-12" data-id="page-2">
-          <h3>
-            <span id="text-11">Nhưng anh luôn dũng cảm khi đối mặt với </span
-            ><br /><span id="text-12">cuộc sống này</span>
-          </h3>
-          <img src="img/11.jpg" />
-        </div>
-        <div id="/section-3/page-3" class="ft-page page-13" data-id="page-3">
-          <img src="img/12.jpg" />
-          <h3 id="text-13">Anh không biết... tình yêu ở đâu?</h3>
-        </div>
-        <div
-          id="/section-3/page-4"
-          class="ft-page page-14 left-img"
-          data-id="page-4"
-        >
-          <h3 id="text-14">Ở trong gương?</h3>
-          <img src="img/13.jpg" />
-        </div>
-        <div
-          id="/section-3/page-5"
-          class="ft-page page-15 left-img"
-          data-id="page-5"
-        >
-          <h3>
-            <span id="text-15">Hỡi thần cây, tình yêu tôi ở đâu？</span
-            ><br /><span id="text-16"
-              >Thần cây: Câu trả lời ở trong tim...</span
-            >
-          </h3>
-          <img src="img/14.jpg" />
-        </div>
-        <div
-          id="/section-3/page-6"
-          class="ft-page page-16 left-img"
-          data-id="page-6"
-        >
-          <h3>
-            <span id="text-17">Anh suy nghĩ... anh bước đi...</span><br /><span
-              id="text-18"
-              >trong tuyết mênh mong lạnh giá</span
-            >
-          </h3>
-          <img src="img/15.jpg" />
-        </div>
-        <div
-          id="/section-3/page-7"
-          class="ft-page page-17 top-text"
-          data-id="page-7"
-        >
-          <h3 id="text-19">Cho đến 1 ngày... định mệnh đã giải đáp câu hỏi!</h3>
-          <img src="img/16.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-4" data-id="section-4">
-        <div
-          id="/section-4/page-1"
-          class="ft-page page-18 full-img"
-          data-id="page-1"
-        >
-          <p class="text" id="text-20">
-            Sự trầm tư băng giá đã tan chảy! Nụ cười đã thống trị!
-          </p>
-          <img src="img/17.jpg" />
-        </div>
-        <div id="/section-4/page-2" class="ft-page page-19" data-id="page-2">
-          <h3 id="text-21">Anh thích em rồi？</h3>
-          <img src="img/18.jpg" />
-        </div>
-        <div id="/section-4/page-3" class="ft-page page-20" data-id="page-3">
-          <img src="img/19.png" />
-          <h3 id="text-22">Cuối cùng một ngày. Anh lấy tất cả can đảm...</h3>
-          <img src="img/20.jpg" />
-        </div>
-        <div id="/section-4/page-4" class="ft-page page-21" data-id="page-4">
-          <h3 id="text-23">Anh đã rất hạnh phúc</h3>
-          <img src="img/21.png" />
-        </div>
-        <div
-          id="/section-4/page-5"
-          class="ft-page page-22 left-img"
-          data-id="page-5"
-        >
-          <h3 id="text-24">Em cùng anh đi trên định mệnh</h3>
-          <img src="img/22.jpg" />
-        </div>
-        <div
-          id="/section-4/page-6"
-          class="ft-page page-23 left-img"
-          data-id="page-6"
-        >
-          <h3 id="text-25">Nhìn lên ↑ Tương lai ta đấy ❤</h3>
-          <img src="img/23.jpg" />
-        </div>
-        <div
-          id="/section-4/page-7"
-          class="ft-page page-24 full-img"
-          data-id="page-7"
-        >
-          <h3 id="text-26">Bước trên đường đời, ta cùng nhau suy nghĩ</h3>
-          <img src="img/24.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-5" data-id="section-5">
-        <div
-          id="/section-5/page-1"
-          class="ft-page page-25 left-img"
-          data-id="page-1"
-        >
-          <h3>
-            <span id="text-27">Tạm biệt em!</span><br /><span id="text-28"
-              >Sau đó anh mĩm cười quay về!</span
-            >
-          </h3>
-          <img src="img/25.jpg" />
-        </div>
-        <div
-          id="/section-5/page-2"
-          class="ft-page page-26 top-text"
-          data-id="page-2"
-        >
-          <h3 id="text-29">Sau đó, ngủ trong hạnh phúc, mơ về em!</h3>
-          <img src="img/26.gif" />
-        </div>
-        <div id="/section-5/page-3" class="ft-page page-27" data-id="page-3">
-          <h3 id="text-30">Mơ về hạnh phúc của em!</h3>
-          <img src="img/27.jpg" />
-        </div>
-        <div id="/section-5/page-4" class="ft-page page-28" data-id="page-4">
-          <h3 id="text-31">Niềm vui... ở mọi nơi!</h3>
-          <img src="img/28.jpg" />
-        </div>
-        <div id="/section-5/page-5" class="ft-page page-29" data-id="page-5">
-          <h3 id="text-32">Tình yêu chúng ta luôn ngọt như vị kẹo!</h3>
-          <img src="img/29.jpg" />
-        </div>
-        <div id="/section-5/page-6" class="ft-page page-30" data-id="page-6">
-          <h3 id="text-33">Rồi đến khi chúng ta về một nhà.</h3>
-          <img src="img/30.gif" />
-        </div>
-        <div id="/section-5/page-7" class="ft-page page-31" data-id="page-7">
-          <h3 id="text-34">Sau đó, Anh học những kỹ năng...</h3>
-          <img src="img/31.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-6" data-id="section-6">
-        <div id="/section-6/page-1" class="ft-page page-32" data-id="page-1">
-          <h3 id="text-35">...nấu ăn</h3>
-          <img src="img/32.jpg" />
-        </div>
-        <div
-          id="/section-6/page-2"
-          class="ft-page page-33 top-text"
-          data-id="page-2"
-        >
-          <h3 id="text-36">Mỗi sáng, ta cùng ăn những thức ăn riêng ta!</h3>
-          <img src="img/33.jpg" />
-        </div>
-        <div
-          id="/section-6/page-3"
-          class="ft-page page-34 left-img"
-          data-id="page-3"
-        >
-          <h3 id="text-37"></h3>
-        </div>
-        <div id="/section-6/page-4" class="ft-page page-35" data-id="page-4">
-          <h3>
-            <span id="text-38"></span><br /><span
-              id="text-39"
-              >/span
-            ><br /><span id="text-40"
-              ></span
-            >
-          </h3>
-          <img src="img/iali8.gif" />
-        </div>
-        <div
-          id="/section-6/page-5"
-          class="ft-page page-36 full-img"
-          data-id="page-5"
-        >
-          <h3 id="text-41"></h3>
-          <img src="img/34.jpg" />
-        </div>
-        <div
-          id="/section-6/page-6"
-          class="ft-page page-37 left-img"
-          data-id="page-6"
-        >
-          <h3 id="text-42"></h3>
-          <img src="img/35.jpg" />
-        </div>
-        <div
-          id="/section-6/page-7"
-          class="ft-page page-38 bottom-text"
-          data-id="page-7"
-        >
-          <img src="img/36.jpg" />
-          <h3 id="text-43">/h3>
-        </div>
-      </div>
-      <div class="ft-section section-7" data-id="section-7">
-        <div
-          id="/section-7/page-1"
-          class="ft-page page-39 left-img"
-          data-id="page-1"
-        >
-          <h3 id="text-44">
-            <br />
-          
-          </h3>
-          <img src="img/37.jpg" />
-        </div>
-        <div id="/section-7/page-2" class="ft-page page-40" data-id="page-2">
-          <h3 id="text-45">Không em đằng sau...</h3>
-          <img src="img/38.jpg" />
-        </div>
-        <div id="/section-7/page-3" class="ft-page page-41" data-id="page-3">
-          <img src="img/39.jpg" class="img1" />
-          <img src="img/40.jpg" class="img2" />
-          <h3 id="text-46">... anh không thể bay cao và xa hơn!</h3>
-        </div>
-        <div id="/section-7/page-4" class="ft-page page-42" data-id="page-4">
-          <h3>
-            <span id="text-47"></span><br /><span
-              id="text-48"
-              ></span
-            >
-          </h3>
-          <img src="img/41.jpg" />
-        </div>
-        <div id="/section-7/page-5" class="ft-page page-43" data-id="page-5">
-          <img src="img/42.jpg" />
-          <h3 id="text-49">
-        
-          </h3>
-        </div>
-        <div
-          id="/section-7/page-6"
-          class="ft-page page-44 left-img"
-          data-id="page-6"
-        >
-          <h3>
-            <span id="text-50"></span><br /><span
-              id="text-51"
-              ></span
-            >
-          </h3>
-          <img src="img/43.jpg" />
-        </div>
-        <div
-          id="/section-7/page-7"
-          class="ft-page page-45 left-img"
-          data-id="page-7"
-        >
-          <h3>
-            <span id="text-52"></span><br /><span
-              id="text-53"
-              ></span
-            >
-          </h3>
-          <img src="img/iali18.jpg" />
-        </div>
-      </div>
-      <div class="ft-section section-8" data-id="section-8">
-        <div id="/section-8/page-1" class="ft-page page-46" data-id="page-1">
-          <img src="img/iali57.gif" />
-          <h3>
-            <span id="text-54"></span>
-            <span id="text-55"></span>
-            <span id="text-56"></span>
-            <span id="text-57"></span>
-          </h3>
-        </div>
-        <div
-          id="/section-8/page-2"
-          class="ft-page page-47 top-text"
-          data-id="page-2"
-        >
-          <img src="img/iali58.jpg" />
-          <h3>
-            <span id="text-58"></span>
-            <span id="text-59"></span>
-            <span id="text-60"></span>
-            <span id="text-61"></span>
-          </h3>
-        </div>
-        <div
-          id="/section-8/page-3"
-          class="ft-page page-48 left-img"
-          data-id="page-3"
-        >
-          <p>
-            <span id="text-62"></span
-            ><br /><span id="text-63"
-              ></span
-            >
-          </p>
-          <img src="img/iali65.jpg" />
-        </div>
-        <div
-          id="/section-8/page-4"
-          class="ft-page page-49 full-img"
-          data-id="page-4"
-        >
-          <img src="img/iali71.jpg" />
-          <p class="text">
-            <span class="text" id="text-64"></span><br />
-            <span class="text" id="text-65"></span>
-          </p>
-        </div>
-        <div id="/section-8/page-5" class="ft-page page-50" data-id="page-5">
-          <p class="text" id="text-66">
-     
-          </p>
-          <img src="img/iali50_1.jpg" class="img1" />
-          <img src="img/iali50_2.jpg" class="img2" />
-        </div>
-        <div id="/section-8/page-6" class="ft-page page-51" data-id="page-6">
-          <p>
-            <
-          </p>
-        </div>
-      </div>
-      <div class="ft-section section-9" data-id="section-9">
-        <div
-          id="/section-9/page-1"
-          class="ft-page page-52 full-img"
-          data-id="page-1"
-        >
-          <h3 id="text-71">Anh đã sẵn sàng cho một tình yêu vĩnh cữu!</h3>
-          <img src="img/iali20.jpg" />
-        </div>
-        <div id="/section-9/page-2" class="ft-page page-53" data-id="page-2">
-          <img src="img/iali68.jpg" alt="happy birthday" />
-          <h3 id="text-72">Happy Love Day's</h3>
-        </div>
-        <div
-          id="/section-9/page-3"
-          class="ft-page page-54 center-img"
-          data-id="page-3"
-        >
-          <div class="center-img">I love you</div>
-        </div>
-        <div
-          id="/section-9/page-4"
-          class="ft-page page-55 right-img"
-          data-id="page-4"
-        >
-          <img src="img/14915.jpg" />
-          <p class="text">
-            <span id="text-73">❤🧡💛💚💙💜🤎🖤🤍💗💖💘💝</span><br />
-            <span id="text-74">Yêu em rất nhiều<3</span><br />
-            <br />
-            <br />
-
-            <!-- [!] Default [Edit Only] [!] -->
-            <span>
-              »»» Nhấn phím <b>“Esc"</b> sẽ là một minh chứng cho các bức
-              ảnh!</span
-            >
-            <!-- No Edit "Esc" -->
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Audio/Music -->
-    <audio
-      id="bgmMusic"
-      src="music/saveme.mp3"
-      autoplay="autoplay"
-      loop
-      preload="auto"
-      type="audio/mp3"
-    ></audio>
-    <div class="mPower">
-      <span id="on" title="Tắt nhạc"></span
-      ><span id="off" title="Mở nhạc"></span>
-    </div>
-
-    <!-- Library Script -->
-    <script src="js/jquery.min.js"></script>
-    <script src="js/brav1toolbox.js"></script>
-    <script src="js/flowtime.js"></script>
-    <script src="js/love.js"></script>
   </body>
 </html>
